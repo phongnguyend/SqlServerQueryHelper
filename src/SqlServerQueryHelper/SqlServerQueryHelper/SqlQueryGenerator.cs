@@ -79,4 +79,22 @@ public class SqlQueryGenerator
         var sql = sqlBuilder.ToString();
         return sql;
     }
+
+    public static string ExecuteWithLock(string sql, string lockName)
+    {
+        string wrapper = $"""
+            DECLARE @Resource nvarchar(255) = '{lockName}';
+            BEGIN TRY
+                EXEC sp_getapplock @Resource = @Resource, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = -1, @DbPrincipal = 'public';
+                {sql}
+                EXEC sp_releaseapplock @Resource, 'Session';
+            END TRY
+            BEGIN CATCH
+                IF APPLOCK_MODE('public', @Resource, 'Session') != 'NoLock'
+                    EXEC dbo.sp_releaseapplock @Resource, 'Session';
+                THROW
+            END CATCH
+            """;
+        return wrapper;
+    }
 }
